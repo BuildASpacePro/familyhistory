@@ -41,7 +41,6 @@ class FamilyTreeVisualization {
      * Setup the SVG element
      */
     setupSVG() {
-        const container = document.getElementById('tree-container');
         this.svg = d3.select('#tree-svg');
 
         // Create a group for zoom/pan transformations
@@ -67,7 +66,7 @@ class FamilyTreeVisualization {
 
         // Set initial transform to center
         const width = window.innerWidth;
-        const height = window.innerHeight - 60;
+        const height = window.innerHeight;
         const initialTransform = d3.zoomIdentity
             .translate(width / 2, height / 2)
             .scale(0.5);
@@ -78,61 +77,127 @@ class FamilyTreeVisualization {
      * Setup event listeners
      */
     setupEventListeners() {
-        // Zoom controls
-        document.getElementById('zoom-in').addEventListener('click', () => {
-            this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.3);
-        });
+        // Info modal
+        const infoBtn = document.getElementById('info-btn');
+        const infoModal = document.getElementById('info-modal');
+        const modalClose = document.getElementById('modal-close');
 
-        document.getElementById('zoom-out').addEventListener('click', () => {
-            this.svg.transition().duration(300).call(this.zoom.scaleBy, 0.7);
-        });
+        if (infoBtn) {
+            infoBtn.addEventListener('click', () => {
+                infoModal.classList.add('visible');
+            });
+        }
 
-        document.getElementById('reset-view').addEventListener('click', () => {
-            this.resetView();
-        });
+        if (modalClose) {
+            modalClose.addEventListener('click', () => {
+                infoModal.classList.remove('visible');
+            });
+        }
 
-        // Search functionality
-        const searchInput = document.getElementById('search');
-        searchInput.addEventListener('input', (e) => {
-            this.searchNodes(e.target.value);
-        });
+        if (infoModal) {
+            infoModal.addEventListener('click', (e) => {
+                if (e.target === infoModal) {
+                    infoModal.classList.remove('visible');
+                }
+            });
+        }
 
         // File input
-        document.getElementById('file-input').addEventListener('change', (e) => {
-            this.handleFileUpload(e);
-        });
+        const fileInput = document.getElementById('file-input');
+        const fileDropZone = document.getElementById('file-drop-zone');
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                this.handleFileUpload(e);
+                infoModal.classList.remove('visible');
+            });
+        }
+
+        if (fileDropZone) {
+            fileDropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileDropZone.classList.add('dragover');
+            });
+
+            fileDropZone.addEventListener('dragleave', () => {
+                fileDropZone.classList.remove('dragover');
+            });
+
+            fileDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileDropZone.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    this.handleFileFromDrop(file);
+                    infoModal.classList.remove('visible');
+                }
+            });
+        }
 
         // Window resize
         window.addEventListener('resize', () => {
             this.handleResize();
         });
+
+        // Keyboard shortcut to reset view
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const infoModal = document.getElementById('info-modal');
+                infoModal.classList.remove('visible');
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                this.resetView();
+            }
+        });
     }
 
     /**
-     * Load the default GEDCOM file
+     * Load the default GEDCOM from embedded data
      */
-    async loadDefaultGedcom() {
-        try {
-            const response = await fetch('family.ged');
-            if (!response.ok) {
-                throw new Error('Could not load default GEDCOM file');
-            }
-            const content = await response.text();
-            this.processGedcom(content);
-        } catch (error) {
-            console.error('Error loading GEDCOM:', error);
-            this.hideLoading();
-            this.showMessage('Upload a GEDCOM file to view your family tree');
+    loadDefaultGedcom() {
+        // Check if GEDCOM_DATA is available (embedded in family-data.js)
+        if (typeof GEDCOM_DATA !== 'undefined' && GEDCOM_DATA) {
+            this.processGedcom(GEDCOM_DATA);
+        } else {
+            // Try to fetch as fallback (works on web server)
+            this.fetchGedcomFile();
         }
     }
 
     /**
-     * Handle file upload
+     * Fetch GEDCOM file (fallback for web server)
+     */
+    async fetchGedcomFile() {
+        try {
+            const response = await fetch('family.ged');
+            if (!response.ok) {
+                throw new Error('Could not load GEDCOM file');
+            }
+            const content = await response.text();
+            this.processGedcom(content);
+        } catch (error) {
+            console.log('No default GEDCOM loaded. Use the info button to upload a file.');
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * Handle file upload from input
      */
     handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
+        this.handleFileFromDrop(file);
+    }
 
+    /**
+     * Handle file from drop or input
+     */
+    handleFileFromDrop(file) {
         this.showLoading();
 
         const reader = new FileReader();
@@ -151,13 +216,15 @@ class FamilyTreeVisualization {
      */
     processGedcom(content) {
         try {
+            // Reset parser for new data
+            this.parser = new GedcomParser();
+
             const data = this.parser.parse(content);
             const graphData = this.parser.buildGraphData();
 
             this.nodes = graphData.nodes;
             this.links = graphData.links;
 
-            this.updateStats();
             this.render();
             this.hideLoading();
         } catch (error) {
@@ -174,9 +241,15 @@ class FamilyTreeVisualization {
         // Clear existing elements
         this.container.select('.links').selectAll('*').remove();
         this.container.select('.nodes').selectAll('*').remove();
+        this.svg.selectAll('defs').remove();
 
         if (this.nodes.length === 0) {
             return;
+        }
+
+        // Stop existing simulation if any
+        if (this.simulation) {
+            this.simulation.stop();
         }
 
         // Create the force simulation
@@ -281,11 +354,6 @@ class FamilyTreeVisualization {
         const sourceY = d.source.y;
         const targetX = d.target.x;
         const targetY = d.target.y;
-
-        // Calculate control points for bezier curve
-        const dx = targetX - sourceX;
-        const dy = targetY - sourceY;
-        const dr = Math.sqrt(dx * dx + dy * dy);
 
         if (d.type === 'marriage') {
             // Straight line for marriage
@@ -397,40 +465,11 @@ class FamilyTreeVisualization {
     }
 
     /**
-     * Search nodes by name
-     */
-    searchNodes(query) {
-        if (!this.nodeElements) return;
-
-        const lowerQuery = query.toLowerCase().trim();
-
-        this.nodeElements.each(function(d) {
-            const node = d3.select(this);
-            const matches = !lowerQuery || d.name.toLowerCase().includes(lowerQuery);
-
-            node.select('.person-card')
-                .style('opacity', matches ? 1 : 0.2);
-            node.select('.person-name')
-                .style('opacity', matches ? 1 : 0.2);
-            node.select('.person-dates')
-                .style('opacity', matches ? 1 : 0.2);
-        });
-
-        // Highlight and focus on first match
-        if (lowerQuery) {
-            const match = this.nodes.find(n => n.name.toLowerCase().includes(lowerQuery));
-            if (match) {
-                this.focusOnNode(match, false);
-            }
-        }
-    }
-
-    /**
      * Focus on a specific node
      */
     focusOnNode(d, animate = true) {
         const width = window.innerWidth;
-        const height = window.innerHeight - 60;
+        const height = window.innerHeight;
 
         const transform = d3.zoomIdentity
             .translate(width / 2 - d.x, height / 2 - d.y)
@@ -448,7 +487,7 @@ class FamilyTreeVisualization {
      */
     resetView() {
         const width = window.innerWidth;
-        const height = window.innerHeight - 60;
+        const height = window.innerHeight;
 
         const transform = d3.zoomIdentity
             .translate(width / 2, height / 2)
@@ -457,10 +496,6 @@ class FamilyTreeVisualization {
         this.svg.transition()
             .duration(500)
             .call(this.zoom.transform, transform);
-
-        // Clear search
-        document.getElementById('search').value = '';
-        this.searchNodes('');
     }
 
     /**
@@ -471,33 +506,23 @@ class FamilyTreeVisualization {
     }
 
     /**
-     * Update statistics display
-     */
-    updateStats() {
-        const stats = document.getElementById('stats');
-        stats.textContent = `${this.nodes.length} individuals | ${this.links.length} connections`;
-    }
-
-    /**
      * Show loading indicator
      */
     showLoading() {
-        document.getElementById('loading').style.display = 'block';
+        const loading = document.getElementById('loading');
+        if (loading) {
+            loading.style.display = 'block';
+        }
     }
 
     /**
      * Hide loading indicator
      */
     hideLoading() {
-        document.getElementById('loading').style.display = 'none';
-    }
-
-    /**
-     * Show a message to the user
-     */
-    showMessage(message) {
-        const stats = document.getElementById('stats');
-        stats.textContent = message;
+        const loading = document.getElementById('loading');
+        if (loading) {
+            loading.style.display = 'none';
+        }
     }
 
     /**

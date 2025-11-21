@@ -19,78 +19,56 @@
             overflow: hidden;
         }
 
-        #header {
+        #top-icons {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
+            top: 20px;
+            right: 20px;
             display: flex;
+            gap: 12px;
             align-items: center;
-            justify-content: space-between;
-            padding: 0 20px;
             z-index: 1000;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        #header h1 {
-            color: #e0e0e0;
-            font-size: 1.5rem;
-            font-weight: 300;
-        }
-
-        #controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        #controls button {
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #e0e0e0;
-            padding: 8px 16px;
-            border-radius: 8px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: all 0.3s ease;
-            font-size: 0.9rem;
         }
 
-        #controls button:hover {
+        .icon-btn:hover {
             background: rgba(255, 255, 255, 0.2);
             border-color: rgba(255, 255, 255, 0.4);
         }
 
-        #search-container {
-            position: relative;
+        .icon-btn svg {
+            width: 18px;
+            height: 18px;
         }
 
-        #search {
-            background: rgba(255, 255, 255, 0.1);
+        .flag-icon {
+            width: 28px;
+            height: 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.3s ease;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #e0e0e0;
-            padding: 8px 16px;
-            border-radius: 8px;
-            width: 250px;
-            font-size: 0.9rem;
         }
 
-        #search::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        #search:focus {
-            outline: none;
-            border-color: rgba(100, 150, 255, 0.5);
-            background: rgba(255, 255, 255, 0.15);
+        .flag-icon:hover {
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.5);
         }
 
         #tree-container {
             width: 100vw;
             height: 100vh;
-            padding-top: 60px;
         }
 
         #tree-svg {
@@ -242,76 +220,128 @@
             to { transform: rotate(360deg); }
         }
 
-        #file-input-container {
+        /* Info modal */
+        #info-modal {
+            display: none;
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            z-index: 1000;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
         }
 
-        #file-input-label {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px dashed rgba(255, 255, 255, 0.3);
+        #info-modal.visible {
+            display: flex;
+        }
+
+        .modal-content {
+            background: rgba(30, 34, 42, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 500px;
             color: #e0e0e0;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-block;
-            font-size: 0.9rem;
+            position: relative;
         }
 
-        #file-input-label:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.5);
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #fff;
+            font-weight: 400;
+        }
+
+        .modal-content p {
+            margin-bottom: 12px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .modal-content ul {
+            margin: 15px 0;
+            padding-left: 20px;
+        }
+
+        .modal-content li {
+            margin: 8px 0;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .modal-close:hover {
+            color: #fff;
+        }
+
+        #file-drop-zone {
+            margin-top: 20px;
+            padding: 20px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        #file-drop-zone:hover {
+            border-color: rgba(100, 150, 255, 0.6);
+            background: rgba(100, 150, 255, 0.1);
+        }
+
+        #file-drop-zone.dragover {
+            border-color: rgba(100, 200, 100, 0.8);
+            background: rgba(100, 200, 100, 0.1);
         }
 
         #file-input {
             display: none;
         }
-
-        #stats {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 10px 15px;
-            border-radius: 8px;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 0.85rem;
-            z-index: 1000;
-        }
-
-        /* Minimap */
-        #minimap {
-            position: fixed;
-            bottom: 70px;
-            right: 20px;
-            width: 200px;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            overflow: hidden;
-            z-index: 1000;
-        }
-
-        #minimap-viewport {
-            fill: rgba(100, 150, 255, 0.2);
-            stroke: rgba(100, 150, 255, 0.6);
-            stroke-width: 1;
-        }
     </style>
 </head>
 <body>
-    <div id="header">
-        <h1>Family Tree</h1>
-        <div id="controls">
-            <input type="text" id="search" placeholder="Search by name...">
-            <button id="zoom-in">+ Zoom In</button>
-            <button id="zoom-out">- Zoom Out</button>
-            <button id="reset-view">Reset View</button>
-        </div>
+    <div id="top-icons">
+        <!-- British Flag -->
+        <svg class="flag-icon" viewBox="0 0 60 30" title="English">
+            <clipPath id="s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
+            <clipPath id="t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath>
+            <g clip-path="url(#s)">
+                <path d="M0,0 v30 h60 v-30 z" fill="#012169"/>
+                <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>
+                <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#t)" stroke="#C8102E" stroke-width="4"/>
+                <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/>
+                <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/>
+            </g>
+        </svg>
+
+        <!-- Greek Flag -->
+        <svg class="flag-icon" viewBox="0 0 27 18" title="Greek">
+            <rect fill="#0D5EAF" width="27" height="18"/>
+            <path fill="#FFF" d="M0,2h27v2H0zM0,6h27v2H0zM0,10h27v2H0zM0,14h27v2H0z"/>
+            <rect fill="#0D5EAF" width="10" height="10"/>
+            <path fill="#FFF" d="M0,4h10v2H0zM4,0h2v10H4z"/>
+        </svg>
+
+        <!-- Info Icon -->
+        <button class="icon-btn" id="info-btn" title="Information">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" stroke="#e0e0e0"/>
+                <line x1="12" y1="16" x2="12" y2="12" stroke="#e0e0e0"/>
+                <line x1="12" y1="8" x2="12.01" y2="8" stroke="#e0e0e0"/>
+            </svg>
+        </button>
     </div>
 
     <div id="loading">
@@ -325,16 +355,27 @@
 
     <div class="tooltip" id="tooltip"></div>
 
-    <div id="file-input-container">
-        <label id="file-input-label" for="file-input">
-            Load GEDCOM File
-        </label>
-        <input type="file" id="file-input" accept=".ged,.gedcom">
+    <!-- Info Modal -->
+    <div id="info-modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <h2>Family Tree Viewer</h2>
+            <p>Interactive family tree visualization.</p>
+            <ul>
+                <li><strong>Pan:</strong> Click and drag the background</li>
+                <li><strong>Zoom:</strong> Use mouse wheel to zoom in/out</li>
+                <li><strong>Move:</strong> Drag individual people to rearrange</li>
+                <li><strong>Details:</strong> Hover over a person to see more info</li>
+            </ul>
+            <div id="file-drop-zone">
+                <p>Click or drop a GEDCOM file here to load your family tree</p>
+                <input type="file" id="file-input" accept=".ged,.gedcom">
+            </div>
+        </div>
     </div>
 
-    <div id="stats"></div>
-
     <script src="js/gedcom-parser.js"></script>
+    <script src="js/family-data.js"></script>
     <script src="js/family-tree.js"></script>
 </body>
 </html>
