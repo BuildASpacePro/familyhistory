@@ -309,12 +309,37 @@
         #file-input {
             display: none;
         }
+
+        .privacy-notice {
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(255, 200, 100, 0.1);
+            border-left: 3px solid rgba(255, 200, 100, 0.5);
+            border-radius: 4px;
+        }
+
+        .privacy-notice p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .corrections-notice {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            margin-top: 15px;
+        }
+
+        .flag-icon.active {
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+        }
     </style>
 </head>
 <body>
     <div id="top-icons">
         <!-- British Flag -->
-        <svg class="flag-icon" viewBox="0 0 60 30" title="English">
+        <svg class="flag-icon active" id="flag-en" viewBox="0 0 60 30" title="English">
             <clipPath id="s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
             <clipPath id="t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath>
             <g clip-path="url(#s)">
@@ -327,7 +352,7 @@
         </svg>
 
         <!-- Greek Flag -->
-        <svg class="flag-icon" viewBox="0 0 27 18" title="Greek">
+        <svg class="flag-icon" id="flag-el" viewBox="0 0 27 18" title="Greek">
             <rect fill="#0D5EAF" width="27" height="18"/>
             <path fill="#FFF" d="M0,2h27v2H0zM0,6h27v2H0zM0,10h27v2H0zM0,14h27v2H0z"/>
             <rect fill="#0D5EAF" width="10" height="10"/>
@@ -359,16 +384,19 @@
     <div id="info-modal">
         <div class="modal-content">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Family Tree Viewer</h2>
-            <p>Interactive family tree visualization.</p>
+            <h2 data-i18n="modal.title">Family Tree Viewer</h2>
+            <p data-i18n="modal.description">Interactive family tree visualization.</p>
             <ul>
-                <li><strong>Pan:</strong> Click and drag the background</li>
-                <li><strong>Zoom:</strong> Use mouse wheel to zoom in/out</li>
-                <li><strong>Move:</strong> Drag individual people to rearrange</li>
-                <li><strong>Details:</strong> Hover over a person to see more info</li>
+                <li><strong data-i18n="modal.pan">Pan:</strong> <span data-i18n="modal.panDesc">Click and drag the background</span></li>
+                <li><strong data-i18n="modal.zoom">Zoom:</strong> <span data-i18n="modal.zoomDesc">Use mouse wheel to zoom in/out</span></li>
+                <li><strong data-i18n="modal.details">Details:</strong> <span data-i18n="modal.detailsDesc">Hover over a person to see more info</span></li>
             </ul>
+            <div class="privacy-notice">
+                <p data-i18n="modal.privacy">In accordance with UK and EU data protection laws (GDPR), living individuals are not included in this family tree. Only deceased family members are displayed to protect the privacy of living relatives.</p>
+            </div>
+            <p class="corrections-notice" data-i18n="modal.corrections">If you notice any errors in the family tree, please contact me and I will be happy to make corrections.</p>
             <div id="file-drop-zone">
-                <p>Click or drop a GEDCOM file here to load your family tree</p>
+                <p data-i18n="modal.fileUpload">Click or drop a GEDCOM file here to load your family tree</p>
                 <input type="file" id="file-input" accept=".ged,.gedcom">
             </div>
         </div>
@@ -376,6 +404,7 @@
 
     <script src="js/gedcom-parser.js"></script>
     <script src="js/family-data.js"></script>
+    <script src="js/translations.js"></script>
     <script src="js/family-tree.js"></script>
 </body>
 </html>

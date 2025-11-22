@@ -153,6 +153,57 @@ class FamilyTreeVisualization {
                 this.resetView();
             }
         });
+
+        // Language switching via flags
+        const flagEn = document.getElementById('flag-en');
+        const flagEl = document.getElementById('flag-el');
+
+        if (flagEn) {
+            flagEn.addEventListener('click', () => {
+                this.setLanguage('en');
+                flagEn.classList.add('active');
+                flagEl.classList.remove('active');
+            });
+        }
+
+        if (flagEl) {
+            flagEl.addEventListener('click', () => {
+                this.setLanguage('el');
+                flagEl.classList.add('active');
+                flagEn.classList.remove('active');
+            });
+        }
+    }
+
+    /**
+     * Set language and re-render
+     */
+    setLanguage(lang) {
+        i18n.setLanguage(lang);
+        // Re-render nodes to update names for the new language
+        if (this.nodes.length > 0) {
+            this.updateNodeLabels();
+        }
+    }
+
+    /**
+     * Update node labels for current language (without full re-render)
+     */
+    updateNodeLabels() {
+        if (!this.nodeElements) return;
+
+        this.nodeElements.select('.person-name')
+            .text(d => this.truncateName(this.getDisplayName(d), 18));
+    }
+
+    /**
+     * Get display name based on current language
+     */
+    getDisplayName(node) {
+        if (node.data && node.data.names) {
+            return i18n.getName(node.data.names);
+        }
+        return node.name || 'Unknown';
     }
 
     /**
@@ -527,7 +578,7 @@ class FamilyTreeVisualization {
         this.nodeElements.append('text')
             .attr('class', 'person-name')
             .attr('dy', d => d.lifespan ? -4 : 4)
-            .text(d => this.truncateName(d.name, 18));
+            .text(d => this.truncateName(this.getDisplayName(d), 18));
 
         // Add lifespan text
         this.nodeElements.append('text')
@@ -563,47 +614,49 @@ class FamilyTreeVisualization {
         const tooltip = document.getElementById('tooltip');
         const data = d.data;
 
-        let html = `<h3>${d.name}</h3>`;
+        // Get display name for current language
+        const displayName = this.getDisplayName(d);
+        let html = `<h3>${displayName}</h3>`;
 
         if (d.sex) {
-            const sexLabel = d.sex === 'M' ? 'Male' : d.sex === 'F' ? 'Female' : d.sex;
+            const sexLabel = d.sex === 'M' ? i18n.t('sex.male') : d.sex === 'F' ? i18n.t('sex.female') : d.sex;
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Sex:</span>
+                <span class="tooltip-label">${i18n.t('tooltip.sex')}</span>
                 <span class="tooltip-value ${d.sex === 'M' ? 'male' : 'female'}">${sexLabel}</span>
             </div>`;
         }
 
         if (d.birth?.date) {
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Birth:</span>
-                <span class="tooltip-value">${d.birth.date}${d.birth.place ? ' in ' + d.birth.place : ''}</span>
+                <span class="tooltip-label">${i18n.t('tooltip.birth')}</span>
+                <span class="tooltip-value">${d.birth.date}${d.birth.place ? ' - ' + d.birth.place : ''}</span>
             </div>`;
         }
 
         if (d.death?.date) {
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Death:</span>
-                <span class="tooltip-value">${d.death.date}${d.death.place ? ' in ' + d.death.place : ''}</span>
+                <span class="tooltip-label">${i18n.t('tooltip.death')}</span>
+                <span class="tooltip-value">${d.death.date}${d.death.place ? ' - ' + d.death.place : ''}</span>
             </div>`;
         }
 
         if (d.nationality) {
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Nationality:</span>
+                <span class="tooltip-label">${i18n.t('tooltip.nationality')}</span>
                 <span class="tooltip-value">${d.nationality}</span>
             </div>`;
         }
 
         if (d.occupation) {
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Occupation:</span>
+                <span class="tooltip-label">${i18n.t('tooltip.occupation')}</span>
                 <span class="tooltip-value">${d.occupation}</span>
             </div>`;
         }
 
         if (d.titles && d.titles.length > 0) {
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Titles:</span>
+                <span class="tooltip-label">${i18n.t('tooltip.titles')}</span>
                 <span class="tooltip-value">${d.titles.join(', ')}</span>
             </div>`;
         }
@@ -611,7 +664,7 @@ class FamilyTreeVisualization {
         if (data.names && data.names.length > 1) {
             const altNames = data.names.slice(1).map(n => n.full).join(', ');
             html += `<div class="tooltip-row">
-                <span class="tooltip-label">Also:</span>
+                <span class="tooltip-label">${i18n.t('tooltip.alsoKnown')}</span>
                 <span class="tooltip-value">${altNames}</span>
             </div>`;
         }
