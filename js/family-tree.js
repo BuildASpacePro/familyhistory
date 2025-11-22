@@ -1,6 +1,6 @@
 /**
  * Family Tree Visualization
- * Uses D3.js for interactive visualization with zoom and pan
+ * Hierarchical layout with generations in rows
  */
 
 class FamilyTreeVisualization {
@@ -8,20 +8,20 @@ class FamilyTreeVisualization {
         this.svg = null;
         this.container = null;
         this.zoom = null;
-        this.simulation = null;
         this.nodes = [];
         this.links = [];
         this.nodeElements = null;
         this.linkElements = null;
         this.parser = new GedcomParser();
+        this.generations = new Map(); // Maps person ID to generation number
 
         this.config = {
             nodeWidth: 140,
             nodeHeight: 50,
             nodeRadius: 12,
-            linkDistance: 150,
-            chargeStrength: -800,
-            collisionRadius: 80
+            horizontalSpacing: 160,  // Space between nodes horizontally
+            verticalSpacing: 120,    // Space between generations
+            familyGap: 40            // Extra gap between family groups
         };
 
         this.init();
@@ -57,7 +57,7 @@ class FamilyTreeVisualization {
      */
     setupZoom() {
         this.zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
+            .scaleExtent([0.05, 4])
             .on('zoom', (event) => {
                 this.container.attr('transform', event.transform);
             });
@@ -68,8 +68,8 @@ class FamilyTreeVisualization {
         const width = window.innerWidth;
         const height = window.innerHeight;
         const initialTransform = d3.zoomIdentity
-            .translate(width / 2, height / 2)
-            .scale(0.5);
+            .translate(width / 2, 100)
+            .scale(0.3);
         this.svg.call(this.zoom.transform, initialTransform);
     }
 
@@ -143,7 +143,7 @@ class FamilyTreeVisualization {
             this.handleResize();
         });
 
-        // Keyboard shortcut to reset view
+        // Keyboard shortcuts
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 const infoModal = document.getElementById('info-modal');
@@ -159,11 +159,9 @@ class FamilyTreeVisualization {
      * Load the default GEDCOM from embedded data
      */
     loadDefaultGedcom() {
-        // Check if GEDCOM_DATA is available (embedded in family-data.js)
         if (typeof GEDCOM_DATA !== 'undefined' && GEDCOM_DATA) {
             this.processGedcom(GEDCOM_DATA);
         } else {
-            // Try to fetch as fallback (works on web server)
             this.fetchGedcomFile();
         }
     }
@@ -216,14 +214,16 @@ class FamilyTreeVisualization {
      */
     processGedcom(content) {
         try {
-            // Reset parser for new data
             this.parser = new GedcomParser();
-
             const data = this.parser.parse(content);
             const graphData = this.parser.buildGraphData();
 
             this.nodes = graphData.nodes;
             this.links = graphData.links;
+
+            // Calculate generations and positions
+            this.calculateGenerations();
+            this.calculatePositions();
 
             this.render();
             this.hideLoading();
@@ -232,6 +232,234 @@ class FamilyTreeVisualization {
             this.hideLoading();
             alert('Error parsing GEDCOM file: ' + error.message);
         }
+    }
+
+    /**
+     * Calculate generation numbers for each person
+     * Uses birth dates when available, falls back to family relationships
+     */
+    calculateGenerations() {
+        this.generations.clear();
+
+        // Build parent-child relationship maps
+        const childToParents = new Map();
+        const parentToChildren = new Map();
+
+        this.links.forEach(link => {
+            if (link.type === 'parent-child') {
+                const parentId = link.source.id || link.source;
+                const childId = link.target.id || link.target;
+
+                if (!childToParents.has(childId)) {
+                    childToParents.set(childId, []);
+                }
+                childToParents.get(childId).push(parentId);
+
+                if (!parentToChildren.has(parentId)) {
+                    parentToChildren.set(parentId, []);
+                }
+                parentToChildren.get(parentId).push(childId);
+            }
+        });
+
+        // Find root ancestors (people with no parents in the data)
+        const roots = this.nodes.filter(node => !childToParents.has(node.id));
+
+        // BFS from roots to assign generations
+        const queue = [];
+        roots.forEach(root => {
+            this.generations.set(root.id, 0);
+            queue.push(root.id);
+        });
+
+        while (queue.length > 0) {
+            const currentId = queue.shift();
+            const currentGen = this.generations.get(currentId);
+
+            const children = parentToChildren.get(currentId) || [];
+            children.forEach(childId => {
+                if (!this.generations.has(childId)) {
+                    this.generations.set(childId, currentGen + 1);
+                    queue.push(childId);
+                } else {
+                    // Update to deeper generation if needed
+                    const existingGen = this.generations.get(childId);
+                    if (currentGen + 1 > existingGen) {
+                        this.generations.set(childId, currentGen + 1);
+                        queue.push(childId);
+                    }
+                }
+            });
+        }
+
+        // Handle disconnected nodes (people not connected to any tree)
+        this.nodes.forEach(node => {
+            if (!this.generations.has(node.id)) {
+                // Try to estimate from birth year if available
+                const birthYear = this.extractYear(node.birth?.date);
+                if (birthYear) {
+                    // Rough estimate: generation = (birthYear - 1000) / 25
+                    const estimatedGen = Math.floor((birthYear - 1000) / 30);
+                    this.generations.set(node.id, Math.max(0, estimatedGen));
+                } else {
+                    this.generations.set(node.id, 0);
+                }
+            }
+        });
+
+        // Normalize generations to start from 0
+        let minGen = Infinity;
+        this.generations.forEach(gen => {
+            if (gen < minGen) minGen = gen;
+        });
+        if (minGen !== 0 && minGen !== Infinity) {
+            this.generations.forEach((gen, id) => {
+                this.generations.set(id, gen - minGen);
+            });
+        }
+    }
+
+    /**
+     * Extract year from a date string
+     */
+    extractYear(dateStr) {
+        if (!dateStr) return null;
+        const match = dateStr.match(/\b(\d{3,4})\b/);
+        return match ? parseInt(match[1], 10) : null;
+    }
+
+    /**
+     * Calculate x,y positions for all nodes
+     */
+    calculatePositions() {
+        // Group nodes by generation
+        const generationGroups = new Map();
+
+        this.nodes.forEach(node => {
+            const gen = this.generations.get(node.id) || 0;
+            if (!generationGroups.has(gen)) {
+                generationGroups.set(gen, []);
+            }
+            generationGroups.get(gen).push(node);
+        });
+
+        // Sort generations
+        const sortedGens = Array.from(generationGroups.keys()).sort((a, b) => a - b);
+
+        // Build spouse pairs for better positioning
+        const spousePairs = new Map();
+        this.links.forEach(link => {
+            if (link.type === 'marriage') {
+                const id1 = link.source.id || link.source;
+                const id2 = link.target.id || link.target;
+                spousePairs.set(id1, id2);
+                spousePairs.set(id2, id1);
+            }
+        });
+
+        // Position each generation
+        sortedGens.forEach((gen, genIndex) => {
+            const nodesInGen = generationGroups.get(gen);
+
+            // Sort nodes within generation to keep spouses together
+            nodesInGen.sort((a, b) => {
+                const aSpouse = spousePairs.get(a.id);
+                const bSpouse = spousePairs.get(b.id);
+
+                // Keep spouses adjacent
+                if (aSpouse === b.id) return -1;
+                if (bSpouse === a.id) return 1;
+
+                // Otherwise sort by name for consistency
+                return a.name.localeCompare(b.name);
+            });
+
+            // Calculate y position (generation row)
+            const y = genIndex * this.config.verticalSpacing;
+
+            // Calculate x positions
+            const totalWidth = nodesInGen.length * this.config.horizontalSpacing;
+            const startX = -totalWidth / 2;
+
+            nodesInGen.forEach((node, i) => {
+                node.x = startX + (i + 0.5) * this.config.horizontalSpacing;
+                node.y = y;
+                node.generation = gen;
+            });
+        });
+
+        // Second pass: try to center children under parents
+        this.optimizePositions(generationGroups, sortedGens);
+    }
+
+    /**
+     * Optimize positions to reduce link crossings and center children under parents
+     */
+    optimizePositions(generationGroups, sortedGens) {
+        // Build parent-child map
+        const parentToChildren = new Map();
+        this.links.forEach(link => {
+            if (link.type === 'parent-child') {
+                const parentId = link.source.id || link.source;
+                const childId = link.target.id || link.target;
+                if (!parentToChildren.has(parentId)) {
+                    parentToChildren.set(parentId, []);
+                }
+                parentToChildren.get(parentId).push(childId);
+            }
+        });
+
+        // Create node lookup
+        const nodeById = new Map();
+        this.nodes.forEach(node => nodeById.set(node.id, node));
+
+        // Multiple passes to optimize
+        for (let pass = 0; pass < 3; pass++) {
+            // Position children centered under parents
+            sortedGens.forEach(gen => {
+                const nodesInGen = generationGroups.get(gen);
+
+                nodesInGen.forEach(node => {
+                    const children = parentToChildren.get(node.id) || [];
+                    if (children.length > 0) {
+                        const childNodes = children.map(id => nodeById.get(id)).filter(n => n);
+                        if (childNodes.length > 0) {
+                            // Calculate average x of children
+                            const avgChildX = childNodes.reduce((sum, c) => sum + c.x, 0) / childNodes.length;
+                            // Move parent toward children's center (partial adjustment)
+                            node.x = node.x * 0.3 + avgChildX * 0.7;
+                        }
+                    }
+                });
+            });
+
+            // Prevent overlaps within each generation
+            sortedGens.forEach(gen => {
+                const nodesInGen = generationGroups.get(gen);
+                nodesInGen.sort((a, b) => a.x - b.x);
+
+                for (let i = 1; i < nodesInGen.length; i++) {
+                    const prev = nodesInGen[i - 1];
+                    const curr = nodesInGen[i];
+                    const minDist = this.config.horizontalSpacing;
+
+                    if (curr.x - prev.x < minDist) {
+                        curr.x = prev.x + minDist;
+                    }
+                }
+            });
+        }
+
+        // Center the tree horizontally
+        let minX = Infinity, maxX = -Infinity;
+        this.nodes.forEach(node => {
+            if (node.x < minX) minX = node.x;
+            if (node.x > maxX) maxX = node.x;
+        });
+        const centerOffset = (minX + maxX) / 2;
+        this.nodes.forEach(node => {
+            node.x -= centerOffset;
+        });
     }
 
     /**
@@ -247,44 +475,31 @@ class FamilyTreeVisualization {
             return;
         }
 
-        // Stop existing simulation if any
-        if (this.simulation) {
-            this.simulation.stop();
-        }
+        // Create node lookup for links
+        const nodeById = new Map();
+        this.nodes.forEach(node => nodeById.set(node.id, node));
 
-        // Create the force simulation
-        this.simulation = d3.forceSimulation(this.nodes)
-            .force('link', d3.forceLink(this.links)
-                .id(d => d.id)
-                .distance(this.config.linkDistance)
-                .strength(0.5))
-            .force('charge', d3.forceManyBody()
-                .strength(this.config.chargeStrength))
-            .force('collision', d3.forceCollide()
-                .radius(this.config.collisionRadius))
-            .force('center', d3.forceCenter(0, 0));
+        // Update links with actual node references
+        this.links.forEach(link => {
+            if (typeof link.source === 'string') {
+                link.source = nodeById.get(link.source);
+            }
+            if (typeof link.target === 'string') {
+                link.target = nodeById.get(link.target);
+            }
+        });
+
+        // Filter out links with missing nodes
+        const validLinks = this.links.filter(link => link.source && link.target);
 
         // Render links
         this.linkElements = this.container.select('.links')
             .selectAll('.link')
-            .data(this.links)
+            .data(validLinks)
             .enter()
             .append('path')
             .attr('class', d => `link ${d.type}`)
-            .attr('marker-end', d => d.type === 'parent-child' ? 'url(#arrow)' : null);
-
-        // Add arrow marker for parent-child links
-        this.svg.append('defs').append('marker')
-            .attr('id', 'arrow')
-            .attr('viewBox', '0 -5 10 10')
-            .attr('refX', 60)
-            .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('d', 'M0,-5L10,0L0,5')
-            .attr('fill', 'rgba(100, 200, 255, 0.25)');
+            .attr('d', d => this.linkPath(d));
 
         // Render nodes
         this.nodeElements = this.container.select('.nodes')
@@ -293,10 +508,7 @@ class FamilyTreeVisualization {
             .enter()
             .append('g')
             .attr('class', 'person-node')
-            .call(d3.drag()
-                .on('start', (event, d) => this.dragStarted(event, d))
-                .on('drag', (event, d) => this.dragged(event, d))
-                .on('end', (event, d) => this.dragEnded(event, d)))
+            .attr('transform', d => `translate(${d.x}, ${d.y})`)
             .on('mouseenter', (event, d) => this.showTooltip(event, d))
             .on('mouseleave', () => this.hideTooltip())
             .on('click', (event, d) => this.focusOnNode(d));
@@ -322,32 +534,10 @@ class FamilyTreeVisualization {
             .attr('class', 'person-dates')
             .attr('dy', 12)
             .text(d => d.lifespan ? this.truncateName(d.lifespan, 20) : '');
-
-        // Update positions on simulation tick
-        this.simulation.on('tick', () => this.tick());
-
-        // Run simulation for a bit then stop to improve performance
-        this.simulation.alpha(1).restart();
-        setTimeout(() => {
-            if (this.simulation) {
-                this.simulation.alphaTarget(0);
-            }
-        }, 3000);
     }
 
     /**
-     * Tick function for simulation
-     */
-    tick() {
-        this.linkElements
-            .attr('d', d => this.linkPath(d));
-
-        this.nodeElements
-            .attr('transform', d => `translate(${d.x}, ${d.y})`);
-    }
-
-    /**
-     * Generate curved path for links
+     * Generate path for links
      */
     linkPath(d) {
         const sourceX = d.source.x;
@@ -356,32 +546,14 @@ class FamilyTreeVisualization {
         const targetY = d.target.y;
 
         if (d.type === 'marriage') {
-            // Straight line for marriage
+            // Straight horizontal line for marriage (spouses on same level)
             return `M${sourceX},${sourceY}L${targetX},${targetY}`;
         } else {
-            // Curved line for parent-child
-            return `M${sourceX},${sourceY}Q${sourceX},${(sourceY + targetY) / 2} ${targetX},${targetY}`;
+            // Curved line for parent-child (vertical relationship)
+            const midY = (sourceY + targetY) / 2;
+            return `M${sourceX},${sourceY + this.config.nodeHeight / 2}
+                    C${sourceX},${midY} ${targetX},${midY} ${targetX},${targetY - this.config.nodeHeight / 2}`;
         }
-    }
-
-    /**
-     * Drag handlers
-     */
-    dragStarted(event, d) {
-        if (!event.active) this.simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-    }
-
-    dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
-
-    dragEnded(event, d) {
-        if (!event.active) this.simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
     }
 
     /**
@@ -436,7 +608,6 @@ class FamilyTreeVisualization {
             </div>`;
         }
 
-        // Show additional names if available
         if (data.names && data.names.length > 1) {
             const altNames = data.names.slice(1).map(n => n.full).join(', ');
             html += `<div class="tooltip-row">
@@ -447,7 +618,6 @@ class FamilyTreeVisualization {
 
         tooltip.innerHTML = html;
 
-        // Position tooltip
         const x = event.pageX + 15;
         const y = event.pageY + 15;
 
@@ -483,15 +653,38 @@ class FamilyTreeVisualization {
     }
 
     /**
-     * Reset view to center
+     * Reset view to show full tree
      */
     resetView() {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
+        // Calculate bounds of tree
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        this.nodes.forEach(node => {
+            if (node.x < minX) minX = node.x;
+            if (node.x > maxX) maxX = node.x;
+            if (node.y < minY) minY = node.y;
+            if (node.y > maxY) maxY = node.y;
+        });
+
+        const treeWidth = maxX - minX + this.config.nodeWidth * 2;
+        const treeHeight = maxY - minY + this.config.nodeHeight * 2;
+
+        const scale = Math.min(
+            width / treeWidth * 0.9,
+            height / treeHeight * 0.9,
+            1
+        );
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
         const transform = d3.zoomIdentity
-            .translate(width / 2, height / 2)
-            .scale(0.5);
+            .translate(width / 2 - centerX * scale, height / 2 - centerY * scale)
+            .scale(scale);
 
         this.svg.transition()
             .duration(500)
@@ -502,7 +695,7 @@ class FamilyTreeVisualization {
      * Handle window resize
      */
     handleResize() {
-        // Update any size-dependent elements
+        // Could trigger resetView or adjust positions
     }
 
     /**
